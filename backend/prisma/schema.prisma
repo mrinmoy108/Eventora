@@ -1,0 +1,779 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  attendee
+  organizer
+  event_manager
+  photographer
+  admin
+}
+
+enum OAuthProvider {
+  local
+  google
+  facebook
+}
+
+model User {
+  id               Int       @id @default(autoincrement()) @db.UnsignedInt
+  full_name        String    @db.VarChar(120)
+  email            String    @unique @db.VarChar(180)
+  password_hash    String    @db.VarChar(255)
+  role             Role      @default(attendee)
+  phone            String?   @db.VarChar(20)
+  avatar_url       String?   @db.VarChar(500)
+  is_verified      Boolean   @default(false)
+  is_active        Boolean   @default(true)
+  oauth_provider   OAuthProvider @default(local)
+  oauth_uid        String?   @db.VarChar(255)
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  email_verifications EmailVerification[]
+  organizer_profile   OrganizerProfile?
+  professional        Professional?
+  events              Event[] @relation("OrganizerEvents")
+  orders              Order[] @relation("AttendeeOrders")
+  tickets             Ticket[] @relation("AttendeeTickets")
+  reviews             Review[] @relation("Reviewer")
+  messages_sent       Message[] @relation("Sender")
+  messages_received   Message[] @relation("Receiver")
+  notifications       Notification[]
+  saved_events        SavedEvent[]
+  payouts             Payout[] @relation("RecipientPayouts")
+  bookings_as_organizer Booking[] @relation("OrganizerBookings")
+
+  @@map("users")
+  @@index([role])
+  @@index([is_active])
+}
+
+enum VerificationType {
+  verify_email
+  reset_password
+}
+
+model EmailVerification {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  user_id     Int      @db.UnsignedInt
+  token       String   @unique @db.VarChar(64)
+  type        VerificationType
+  expires_at  DateTime
+  used_at     DateTime?
+  created_at  DateTime @default(now())
+
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("email_verifications")
+  @@index([user_id])
+}
+
+model OrganizerProfile {
+  id               Int      @id @default(autoincrement()) @db.UnsignedInt
+  user_id          Int      @unique @db.UnsignedInt
+  org_name         String   @db.VarChar(160)
+  org_logo_url     String?  @db.VarChar(500)
+  bio              String?  @db.Text
+  website          String?  @db.VarChar(300)
+  facebook_url     String?  @db.VarChar(300)
+  twitter_url      String?  @db.VarChar(300)
+  instagram_url    String?  @db.VarChar(300)
+  bank_account_ref String?  @db.VarChar(255)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  user             User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("organizer_profiles")
+}
+
+enum ProType {
+  event_manager
+  photographer
+  videographer
+  photographer_videographer
+}
+
+enum PriceUnit {
+  per_hour
+  per_day
+  per_event
+}
+
+model Professional {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  user_id         Int      @unique @db.UnsignedInt
+  pro_type        ProType
+  bio             String?  @db.Text
+  city            String   @db.VarChar(100)
+  country         String   @default("Bangladesh") @db.VarChar(80)
+  base_price      Decimal  @default(0.00) @db.Decimal(10, 2)
+  price_unit      PriceUnit @default(per_event)
+  years_exp       Int?     @default(0) @db.UnsignedTinyInt
+  is_approved     Boolean  @default(false)
+  is_available    Boolean  @default(true)
+  avg_rating      Decimal  @default(0.00) @db.Decimal(3, 2)
+  review_count    Int      @default(0) @db.UnsignedInt
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  user            User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  specialties     ProfessionalSpecialty[]
+  portfolio       ProfessionalPortfolio[]
+  packages        Package[]
+  availability    ProfessionalAvailability[]
+  bookings        Booking[] @relation("ProfessionalBookings")
+  reviews         Review[]  @relation("ProfessionalReviews")
+
+  @@map("professionals")
+  @@index([pro_type])
+  @@index([city])
+  @@index([is_approved])
+}
+
+model ProfessionalSpecialty {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  professional_id Int      @db.UnsignedInt
+  specialty       String   @db.VarChar(100)
+
+  professional    Professional @relation(fields: [professional_id], references: [id], onDelete: Cascade)
+
+  @@map("professional_specialties")
+  @@index([professional_id])
+}
+
+enum MediaType {
+  image
+  video
+}
+
+model ProfessionalPortfolio {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  professional_id Int      @db.UnsignedInt
+  media_url       String   @db.VarChar(500)
+  media_type      MediaType @default(image)
+  caption         String?  @db.VarChar(255)
+  display_order   Int      @default(0) @db.UnsignedTinyInt
+  created_at      DateTime @default(now())
+
+  professional    Professional @relation(fields: [professional_id], references: [id], onDelete: Cascade)
+
+  @@map("professional_portfolio")
+  @@index([professional_id])
+}
+
+model Package {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  professional_id Int      @db.UnsignedInt
+  name            String   @db.VarChar(100)
+  description     String?  @db.Text
+  price           Decimal  @db.Decimal(10, 2)
+  duration_hours  Decimal? @db.Decimal(4, 1)
+  inclusions      String?  @db.Text
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  professional    Professional @relation(fields: [professional_id], references: [id], onDelete: Cascade)
+  bookings        Booking[]
+
+  @@map("packages")
+  @@index([professional_id])
+}
+
+model ProfessionalAvailability {
+  id               Int      @id @default(autoincrement()) @db.UnsignedInt
+  professional_id  Int      @db.UnsignedInt
+  unavailable_date DateTime @db.Date
+  reason           String?  @db.VarChar(255)
+
+  professional     Professional @relation(fields: [professional_id], references: [id], onDelete: Cascade)
+
+  @@map("professional_availability")
+  @@unique([professional_id, unavailable_date])
+}
+
+model Category {
+  id            Int      @id @default(autoincrement()) @db.UnsignedInt
+  name          String   @db.VarChar(80)
+  slug          String   @unique @db.VarChar(100)
+  icon_url      String?  @db.VarChar(500)
+  color_hex     String?  @default("#6C3FE8") @db.VarChar(7)
+  is_active     Boolean  @default(true)
+  display_order Int      @default(0) @db.UnsignedTinyInt
+
+  events        Event[]
+
+  @@map("categories")
+}
+
+enum EventType {
+  in_person
+  online
+  hybrid
+}
+
+enum EventStatus {
+  draft
+  published
+  cancelled
+  completed
+}
+
+enum EventVisibility {
+  public
+  unlisted
+  private
+}
+
+enum RefundPolicy {
+  no_refund
+  hours_48   @map("48_hours")
+  days_7     @map("7_days")
+}
+
+model Event {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  organizer_id    Int      @db.UnsignedInt
+  category_id     Int?     @db.UnsignedInt
+  title           String   @db.VarChar(200)
+  slug            String   @unique @db.VarChar(220)
+  event_type      EventType @default(in_person)
+  short_desc      String?  @db.VarChar(300)
+  description     String?  @db.LongText
+  cover_image_url String?  @db.VarChar(500)
+
+  venue_name      String?  @db.VarChar(200)
+  address         String?  @db.VarChar(400)
+  city            String?  @db.VarChar(100)
+  country         String?  @db.VarChar(80)
+  latitude        Decimal? @db.Decimal(10, 7)
+  longitude       Decimal? @db.Decimal(10, 7)
+
+  online_platform String?  @db.VarChar(100)
+  online_link     String?  @db.VarChar(500)
+
+  start_datetime  DateTime
+  end_datetime    DateTime
+  timezone        String   @default("Asia/Dhaka") @db.VarChar(60)
+
+  total_capacity  Int?     @db.UnsignedInt
+  status          EventStatus @default(draft)
+  visibility      EventVisibility @default(public)
+  is_featured     Boolean  @default(false)
+  refund_policy   RefundPolicy @default(no_refund)
+
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  organizer       User      @relation("OrganizerEvents", fields: [organizer_id], references: [id], onDelete: Restrict)
+  category        Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+
+  gallery         EventGallery[]
+  tags            EventTag[]
+  faqs            EventFaq[]
+  agenda          EventAgenda[]
+  custom_questions EventCustomQuestion[]
+  ticket_tiers    TicketTier[]
+  promo_codes     PromoCode[]
+  orders          Order[]
+  tickets         Ticket[]
+  bookings        Booking[]
+  reviews         Review[]  @relation("EventReviews")
+  saved_events    SavedEvent[]
+  announcements   EventAnnouncement[]
+
+  @@map("events")
+  @@index([organizer_id])
+  @@index([category_id])
+  @@index([status])
+  @@index([start_datetime])
+  @@index([is_featured])
+}
+
+model EventGallery {
+  id            Int      @id @default(autoincrement()) @db.UnsignedInt
+  event_id      Int      @db.UnsignedInt
+  image_url     String   @db.VarChar(500)
+  caption       String?  @db.VarChar(255)
+  display_order Int      @default(0) @db.UnsignedTinyInt
+  created_at    DateTime @default(now())
+
+  event         Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("event_gallery")
+  @@index([event_id])
+}
+
+model EventTag {
+  id       Int    @id @default(autoincrement()) @db.UnsignedInt
+  event_id Int    @db.UnsignedInt
+  tag      String @db.VarChar(80)
+
+  event    Event  @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("event_tags")
+  @@index([event_id])
+  @@index([tag])
+}
+
+model EventFaq {
+  id            Int    @id @default(autoincrement()) @db.UnsignedInt
+  event_id      Int    @db.UnsignedInt
+  question      String @db.VarChar(400)
+  answer        String @db.Text
+  display_order Int    @default(0) @db.UnsignedTinyInt
+
+  event         Event  @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("event_faq")
+  @@index([event_id])
+}
+
+model EventAgenda {
+  id            Int      @id @default(autoincrement()) @db.UnsignedInt
+  event_id      Int      @db.UnsignedInt
+  start_time    DateTime @db.Time
+  end_time      DateTime? @db.Time
+  title         String   @db.VarChar(200)
+  description   String?  @db.Text
+  speaker       String?  @db.VarChar(120)
+  display_order Int      @default(0) @db.UnsignedTinyInt
+
+  event         Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("event_agenda")
+  @@index([event_id])
+}
+
+enum FieldType {
+  text
+  textarea
+  select
+  checkbox
+}
+
+model EventCustomQuestion {
+  id            Int      @id @default(autoincrement()) @db.UnsignedInt
+  event_id      Int      @db.UnsignedInt
+  question_text String   @db.VarChar(400)
+  field_type    FieldType @default(text)
+  options_json  Json?
+  is_required   Boolean  @default(false)
+  display_order Int      @default(0) @db.UnsignedTinyInt
+
+  event         Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  answers       OrderCustomAnswer[]
+
+  @@map("event_custom_questions")
+  @@index([event_id])
+}
+
+model TicketTier {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  event_id        Int      @db.UnsignedInt
+  name            String   @db.VarChar(100)
+  description     String?  @db.Text
+  price           Decimal  @default(0.00) @db.Decimal(10, 2)
+  quantity_total  Int      @default(0) @db.UnsignedInt
+  quantity_sold   Int      @default(0) @db.UnsignedInt
+  max_per_buyer   Int      @default(10) @db.UnsignedTinyInt
+  sale_start_at   DateTime?
+  sale_end_at     DateTime?
+  is_active       Boolean  @default(true)
+  display_order   Int      @default(0) @db.UnsignedTinyInt
+
+  event           Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  order_items     OrderItem[]
+  tickets         Ticket[]
+  promo_codes     PromoCode[]
+
+  @@map("ticket_tiers")
+  @@index([event_id])
+}
+
+enum DiscountType {
+  percent
+  fixed
+  free
+}
+
+model PromoCode {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  event_id        Int      @db.UnsignedInt
+  code            String   @db.VarChar(50)
+  discount_type   DiscountType
+  discount_value  Decimal  @default(0.00) @db.Decimal(10, 2)
+  applies_to_tier Int?     @db.UnsignedInt
+  max_uses        Int?     @db.UnsignedInt
+  used_count      Int      @default(0) @db.UnsignedInt
+  expires_at      DateTime?
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now())
+
+  event           Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  ticket_tier     TicketTier? @relation(fields: [applies_to_tier], references: [id], onDelete: SetNull)
+  orders          Order[]
+
+  @@map("promo_codes")
+  @@unique([event_id, code])
+  @@index([event_id])
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+  partial_refund
+}
+
+enum PaymentMethod {
+  stripe
+  paypal
+  bkash
+  nagad
+  bank
+}
+
+model Order {
+  id                     Int      @id @default(autoincrement()) @db.UnsignedInt
+  attendee_id            Int      @db.UnsignedInt
+  event_id               Int      @db.UnsignedInt
+  promo_code_id          Int?     @db.UnsignedInt
+  subtotal               Decimal  @default(0.00) @db.Decimal(10, 2)
+  discount_amount        Decimal  @default(0.00) @db.Decimal(10, 2)
+  platform_fee           Decimal  @default(0.00) @db.Decimal(10, 2)
+  total_amount           Decimal  @default(0.00) @db.Decimal(10, 2)
+  currency               String   @default("BDT") @db.Char(3)
+  payment_status         PaymentStatus @default(pending)
+  payment_method         PaymentMethod?
+  stripe_payment_intent  String?  @db.VarChar(255)
+  stripe_charge_id       String?  @db.VarChar(255)
+  refunded_amount        Decimal  @default(0.00) @db.Decimal(10, 2)
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  attendee               User     @relation("AttendeeOrders", fields: [attendee_id], references: [id], onDelete: Restrict)
+  event                  Event    @relation(fields: [event_id], references: [id], onDelete: Restrict)
+  promo_code             PromoCode? @relation(fields: [promo_code_id], references: [id], onDelete: SetNull)
+
+  order_items            OrderItem[]
+  custom_answers         OrderCustomAnswer[]
+  refund_requests        RefundRequest[]
+
+  @@map("orders")
+  @@index([attendee_id])
+  @@index([event_id])
+  @@index([payment_status])
+}
+
+model OrderItem {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  order_id        Int      @db.UnsignedInt
+  ticket_tier_id  Int      @db.UnsignedInt
+  quantity        Int      @default(1) @db.UnsignedTinyInt
+  unit_price      Decimal  @db.Decimal(10, 2)
+  subtotal        Decimal  @db.Decimal(10, 2)
+
+  order           Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  ticket_tier     TicketTier @relation(fields: [ticket_tier_id], references: [id], onDelete: Restrict)
+  tickets         Ticket[]
+
+  @@map("order_items")
+  @@index([order_id])
+  @@index([ticket_tier_id])
+}
+
+enum TicketStatus {
+  active
+  used
+  cancelled
+  refunded
+}
+
+model Ticket {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  order_item_id   Int      @db.UnsignedInt
+  attendee_id     Int      @db.UnsignedInt
+  event_id        Int      @db.UnsignedInt
+  ticket_tier_id  Int      @db.UnsignedInt
+  qr_code_token   String   @unique @db.VarChar(128)
+  status          TicketStatus @default(active)
+  checked_in_at   DateTime?
+  checked_in_by   Int?     @db.UnsignedInt
+  cancelled_at    DateTime?
+  created_at      DateTime @default(now())
+
+  order_item      OrderItem @relation(fields: [order_item_id], references: [id], onDelete: Restrict)
+  attendee        User      @relation("AttendeeTickets", fields: [attendee_id], references: [id], onDelete: Restrict)
+  event           Event     @relation(fields: [event_id], references: [id], onDelete: Restrict)
+  ticket_tier     TicketTier @relation(fields: [ticket_tier_id], references: [id], onDelete: Restrict)
+
+  @@map("tickets")
+  @@index([attendee_id])
+  @@index([event_id])
+  @@index([order_item_id])
+  @@index([status])
+}
+
+model OrderCustomAnswer {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  order_id    Int      @db.UnsignedInt
+  question_id Int      @db.UnsignedInt
+  answer      String   @db.Text
+
+  order       Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  question    EventCustomQuestion @relation(fields: [question_id], references: [id], onDelete: Cascade)
+
+  @@map("order_custom_answers")
+  @@index([order_id])
+}
+
+enum RefundStatus {
+  pending
+  approved
+  rejected
+  processed
+}
+
+model RefundRequest {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  order_id    Int      @db.UnsignedInt
+  ticket_id   Int?     @db.UnsignedInt
+  reason      String?  @db.Text
+  status      RefundStatus @default(pending)
+  reviewed_by Int?     @db.UnsignedInt
+  reviewed_at DateTime?
+  created_at  DateTime @default(now())
+
+  order       Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@map("refund_requests")
+  @@index([order_id])
+}
+
+enum BookingStatus {
+  pending
+  accepted
+  declined
+  cancelled
+  completed
+}
+
+enum BookingPaymentStatus {
+  unpaid
+  paid
+  payout_pending
+  payout_done
+}
+
+model Booking {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  organizer_id    Int      @db.UnsignedInt
+  professional_id Int      @db.UnsignedInt
+  event_id        Int      @db.UnsignedInt
+  package_id      Int?     @db.UnsignedInt
+  message         String?  @db.Text
+  event_date      DateTime @db.Date
+  status          BookingStatus @default(pending)
+  agreed_price    Decimal? @db.Decimal(10, 2)
+  payment_status  BookingPaymentStatus @default(unpaid)
+  platform_fee    Decimal  @default(0.00) @db.Decimal(10, 2)
+  net_payout      Decimal? @db.Decimal(10, 2)
+  responded_at    DateTime?
+  completed_at    DateTime?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  organizer       User      @relation("OrganizerBookings", fields: [organizer_id], references: [id], onDelete: Restrict)
+  professional    Professional @relation("ProfessionalBookings", fields: [professional_id], references: [id], onDelete: Restrict)
+  event           Event     @relation(fields: [event_id], references: [id], onDelete: Restrict)
+  package         Package?  @relation(fields: [package_id], references: [id], onDelete: SetNull)
+
+  deliverables    Deliverable[]
+  messages        Message[]
+
+  @@map("bookings")
+  @@index([organizer_id])
+  @@index([professional_id])
+  @@index([event_id])
+  @@index([status])
+}
+
+enum FileType {
+  image
+  video
+  archive
+}
+
+model Deliverable {
+  id            Int      @id @default(autoincrement()) @db.UnsignedInt
+  booking_id    Int      @db.UnsignedInt
+  file_url      String   @db.VarChar(500)
+  file_type     FileType @default(image)
+  file_size_kb  Int?     @db.UnsignedInt
+  caption       String?  @db.VarChar(255)
+  created_at    DateTime @default(now())
+
+  booking       Booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  @@map("deliverables")
+  @@index([booking_id])
+}
+
+enum RevieweeType {
+  event
+  professional
+}
+
+model Review {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  reviewer_id     Int      @db.UnsignedInt
+  reviewee_type   RevieweeType
+  event_id        Int?     @db.UnsignedInt
+  professional_id Int?     @db.UnsignedInt
+  booking_id      Int?     @db.UnsignedInt
+  rating          Int      @db.UnsignedTinyInt
+  comment         String?  @db.Text
+  is_flagged      Boolean  @default(false)
+  created_at      DateTime @default(now())
+
+  reviewer        User     @relation("Reviewer", fields: [reviewer_id], references: [id], onDelete: Cascade)
+  event           Event?   @relation("EventReviews", fields: [event_id], references: [id], onDelete: Cascade)
+  professional    Professional? @relation("ProfessionalReviews", fields: [professional_id], references: [id], onDelete: Cascade)
+
+  @@map("reviews")
+  @@index([reviewer_id])
+  @@index([event_id])
+  @@index([professional_id])
+}
+
+model Message {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  booking_id  Int      @db.UnsignedInt
+  sender_id   Int      @db.UnsignedInt
+  receiver_id Int      @db.UnsignedInt
+  content     String   @db.Text
+  is_read     Boolean  @default(false)
+  read_at     DateTime?
+  created_at  DateTime @default(now())
+
+  booking     Booking  @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  sender      User     @relation("Sender", fields: [sender_id], references: [id], onDelete: Cascade)
+  receiver    User     @relation("Receiver", fields: [receiver_id], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+  @@index([booking_id])
+  @@index([sender_id])
+  @@index([receiver_id])
+  @@index([is_read])
+}
+
+model Notification {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  user_id     Int      @db.UnsignedInt
+  type        String   @db.VarChar(80)
+  title       String   @db.VarChar(200)
+  body        String?  @db.Text
+  link        String?  @db.VarChar(500)
+  is_read     Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+  @@index([user_id])
+  @@index([is_read])
+}
+
+model SavedEvent {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  user_id     Int      @db.UnsignedInt
+  event_id    Int      @db.UnsignedInt
+  created_at  DateTime @default(now())
+
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  event       Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("saved_events")
+  @@unique([user_id, event_id])
+  @@index([event_id])
+}
+
+model EventAnnouncement {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  event_id        Int      @db.UnsignedInt
+  organizer_id    Int      @db.UnsignedInt
+  title           String   @db.VarChar(200)
+  body            String   @db.Text
+  target_tier_id  Int?     @db.UnsignedInt
+  sent_at         DateTime?
+  created_at      DateTime @default(now())
+
+  event           Event    @relation(fields: [event_id], references: [id], onDelete: Cascade)
+
+  @@map("event_announcements")
+  @@index([event_id])
+}
+
+enum RecipientType {
+  organizer
+  professional
+}
+
+enum ReferenceType {
+  order
+  booking
+}
+
+enum PayoutMethod {
+  bank
+  paypal
+  bkash
+  nagad
+}
+
+enum PayoutStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+model Payout {
+  id              Int      @id @default(autoincrement()) @db.UnsignedInt
+  recipient_id    Int      @db.UnsignedInt
+  recipient_type  RecipientType
+  reference_id    Int      @db.UnsignedInt
+  reference_type  ReferenceType
+  amount          Decimal  @db.Decimal(10, 2)
+  currency        String   @default("BDT") @db.Char(3)
+  method          PayoutMethod @default(bank)
+  status          PayoutStatus @default(pending)
+  transaction_ref String?  @db.VarChar(255)
+  processed_at    DateTime?
+  created_at      DateTime @default(now())
+
+  recipient       User     @relation("RecipientPayouts", fields: [recipient_id], references: [id], onDelete: Restrict)
+
+  @@map("payouts")
+  @@index([recipient_id])
+  @@index([status])
+}
+
+model PlatformSetting {
+  id            Int      @id @default(autoincrement()) @db.UnsignedInt
+  setting_key   String   @unique @db.VarChar(100)
+  setting_value String   @db.Text
+  updated_at    DateTime @updatedAt
+
+  @@map("platform_settings")
+}

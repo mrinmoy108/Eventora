@@ -1,0 +1,72 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Academic / coursework files (not part of the project)
+*.pdf
+*.docx
+*.doc
+*.pptx
+*.ppt
+*.aux
+*.toc
+*.lof
+*.out
+*.tex
+
+# Python scripts
+*.py
+__pycache__/
+
+# Temp HTML files
+*.html
+
+# Temp images / rendered slides
+rendered_slides/
+extracted_presentation_images/
+temp_docx_assets/
+iterative_incremental_model.png
+extracted_exact_content_background.png
+
+# Text artifacts
+chapter_4_2_*.txt
+feasibility_summary.txt
+scheduling_build_temp.*
+report.*
+
+# Report images (screenshots for LaTeX report, not for the app)
+report_images/
+
+# Prisma generated
+prisma/migrations/
